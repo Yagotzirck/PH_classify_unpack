@@ -1,71 +1,117 @@
 #!/usr/bin/env python3
 
-from os import walk
-from os import path
+class UnspecifiedCallGraphGeneratorError(ValueError):
+    def __init__(self):
+        super().__init__(
+            "You must specify the Call Graph generator to proceed.\n"
+            "Valid options are:\n"
+                "\t--radare2\n"
+                "\t--ghidra"
+        )
+
+
+import glob
+import os
 import sys
+import json
+import radare2_extract_custom_gcg as r2_gcg
 
-from extract_custom_gcg import *
-from tqdm import tqdm
+DATASET_SAMPLES_PATH = "../dataset/samples"
+GENERATED_GRAPHS_BASE_PATH = "../dataset/graphs"
+SAMPLES_LABELS_PATH = "../dataset/samples_labels.json"
 
-# Set path to the packed PE dataset
-DATASET_PATH_PACKED = "../../dataset-packed-pe/not-packed"
-GENERATED_DATASET_PATH = "../paper_evaluation/graph_datasets/dataset-packed-pe/not-packed/"
-dataset = 'not-packed' # True for packgenome dataset
-PACKED_FILES = [(dirpath, filenames) for (dirpath, dirnames, filenames) in walk(DATASET_PATH_PACKED)][1:]
-if PACKED_FILES == []:
-    PACKED_FILES = [(dirpath, filenames) for (dirpath, dirnames, filenames) in walk(DATASET_PATH_PACKED)]
+PACKED_FILES = glob.iglob(f"{DATASET_SAMPLES_PATH}/*")
 
-# List of files that have been discarded because they corresponds to a graph with more than 500 nodes
-# Leave only .exe packed files
-if dataset == 'packgenome-rgd':
-    for i in range(len(PACKED_FILES)):
-        packer = PACKED_FILES[i][0].split("/")[7]
-        PACKED_FILES[i] = (PACKED_FILES[i][0], [file for file in PACKED_FILES[i][1] if file.endswith("_packed.exe")])
+if '--radare2' in sys.argv:
+    gcg = r2_gcg
+    cg_extractor = 'radare2'
+elif '--ghidra' in sys.argv:
+    raise ValueError('This will be implemented later')
+    #cg_extractor = 'ghidra'
+else:
+    raise UnspecifiedCallGraphGeneratorError()
 
-if dataset == 'packgenome-rgd1':
-    for i in range(len(PACKED_FILES)):
-        PACKED_FILES[i] = (PACKED_FILES[i][0], [file for file in PACKED_FILES[i][1] if file.endswith(".exe")])
+GENERATED_GRAPHS_PATH = os.path.join(GENERATED_GRAPHS_BASE_PATH, cg_extractor)
+if not os.path.exists(GENERATED_GRAPHS_PATH):
+    os.makedirs(GENERATED_GRAPHS_PATH)
+
+GENERATED_GRAPHVIZ_PATH = os.path.join(
+    GENERATED_GRAPHS_BASE_PATH, f'{cg_extractor}_graphviz'
+)
+if not os.path.exists(GENERATED_GRAPHVIZ_PATH):
+    os.makedirs(GENERATED_GRAPHVIZ_PATH)
+
 
 discarded_list = []
 
-for i in range(len(PACKED_FILES)):
-    if PACKED_FILES[i][1] == []:
-        continue
+for curr_file in PACKED_FILES:
+    curr_file_name = os.path.basename(curr_file)
+    curr_file_name_no_ext, _ = os.path.splitext(curr_file_name)
+    print(f"Generating Call Graph for {curr_file_name}...")
 
-    if dataset == 'packed_pe_outliers' or dataset == 'packware' or 'packgenome-rgd' or 'packgenome-lpd' or 'not-packed':
-        packer_name = ""
-        version_name = ""
-    else:
-        packer_name = PACKED_FILES[i][0].split("/")[-1] + '_'
-        version_name = ""
+    if (
+        not os.path.exists(
+            os.path.join(GENERATED_GRAPHS_PATH, curr_file_name_no_ext + ".xml")
+        ) or
+        "--regenerate" in sys.argv
+    ):
+        if "--gvzplots" in sys.argv:
 
-    print(packer_name, version_name)
-
-    print("Generating...")
-
-    for j in tqdm(range(len(PACKED_FILES[i][1]))):
-
-        packed_filepath = PACKED_FILES[i][0]
-        packed_filename = PACKED_FILES[i][1][j]
-
-        if not path.exists(GENERATED_DATASET_PATH + packer_name + version_name + packed_filename[:-4] + ".xml") or "--rigenerate" in sys.argv:
-            
-            if "--gvzplots" in sys.argv:
-
-                G, dot_graph = extract_gcg_with_plot(packed_filepath + '/' + packed_filename)
-                if G == None:
-                    discarded_list.append(packer_name + version_name + packed_filename)
-                else:
-                    save_graph_pdf(dot_graph, GENERATED_DATASET_PATH + packer_name + version_name + packed_filename)
-
+            G, dot_graph = gcg.extract_gcg_with_plot(curr_file)
+            if G is None:
+                discarded_list.append(curr_file_name)
             else:
+                gcg.save_graph_pdf(
+                    dot_graph,
+                    os.path.join(GENERATED_GRAPHVIZ_PATH, curr_file_name_no_ext)
+                )
 
-                G = extract_gcg(packed_filepath + '/' + packed_filename)
-                if G == None:
-                    discarded_list.append(packer_name + version_name + packed_filename)
-                
+        else:
+            G = gcg.extract_gcg(curr_file)
+            if G is None:
+                discarded_list.append(curr_file_name)
+            
 
-            if "--graphml" in sys.argv and G != None:
-                save_graph_networkx(G, GENERATED_DATASET_PATH + packer_name + version_name + packed_filename)
+        if "--graphml" in sys.argv and G is not None:
+            gcg.save_graph_networkx(
+                G,
+                os.path.join(GENERATED_GRAPHS_PATH, curr_file_name_no_ext)
+            )
 
 print("\nDiscarded files: ", discarded_list)
+
+
+# Update the labels, removing the discarded files
+with open(SAMPLES_LABELS_PATH, 'r') as in_fp:
+    samples_labels = json.load(in_fp)
+
+discarded_set = set(discarded_list)
+
+for samples_list in samples_labels.values():
+    for sample in samples_list:
+        if sample in discarded_set:
+            samples_list.remove(sample)
+
+samples_labels_basename_no_ext, _ = os.path.splitext(
+    os.path.basename(SAMPLES_LABELS_PATH)
+)
+
+out_samples_labels_filename = os.path.join(
+    GENERATED_GRAPHS_BASE_PATH,
+    f'{samples_labels_basename_no_ext}_{cg_extractor}.json'
+)
+
+with open(out_samples_labels_filename, 'w') as out_fp:
+    json.dump(samples_labels, out_fp)
+
+
+# Save the list of discarded samples
+out_discarded_list_filename = os.path.join(
+    GENERATED_GRAPHS_BASE_PATH,
+    f'discarded_samples_{cg_extractor}.txt' 
+)
+
+with open(out_discarded_list_filename, 'w') as out_fp:
+        out_fp.writelines(
+            f'{discarded_file}\n' for discarded_file in discarded_list
+        )

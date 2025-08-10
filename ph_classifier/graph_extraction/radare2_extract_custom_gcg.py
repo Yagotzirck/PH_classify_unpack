@@ -13,11 +13,11 @@ from collections import deque, defaultdict
 MAX_NUM_NODES = 500
 
 def save_graph_networkx(G, save_filepath):
-    nx.write_graphml(G, save_filepath[:-4] + ".xml")
+    nx.write_graphml(G, save_filepath + ".xml")
 
 def save_graph_pdf(dot_graph, save_filepath):
     s = Source(dot_graph)
-    s.render(save_filepath[:-4], format='pdf', cleanup=True)
+    s.render(save_filepath, format='pdf', cleanup=True)
 
 def plot_graph_pdf(dot_graph):
     
