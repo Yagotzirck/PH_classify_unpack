@@ -174,5 +174,5 @@ pyrightconfig.json
 similarities*.pkl
 log*.txt
 paper_evaluation/
-dataset_exes/
+dataset/
 *.ipynb
