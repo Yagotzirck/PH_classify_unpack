@@ -13,7 +13,6 @@ class UnspecifiedCallGraphGeneratorError(ValueError):
 import glob
 import os
 import sys
-import json
 import radare2_extract_custom_gcg as r2_gcg
 
 
