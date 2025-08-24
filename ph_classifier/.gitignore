@@ -176,3 +176,4 @@ log*.txt
 paper_evaluation/
 dataset/
 *.ipynb
+model/
