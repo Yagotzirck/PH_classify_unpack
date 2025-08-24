@@ -96,3 +96,12 @@ MODEL_GHIDRA_PATH  = os.path.join(
     MODEL_BASE_PATH,
     'trained_net_ghidra.pt'
 )
+
+#####################################################################
+# Dissimilarity matrices' folders 
+#####################################################################
+DISSMATS_RADARE2_PATH = rel_to_abs_path('./dissmats/radare2/')
+os.makedirs(DISSMATS_RADARE2_PATH, exist_ok=True)
+
+DISSMATS_GHIDRA_PATH = rel_to_abs_path('./dissmats/ghidra/')
+os.makedirs(DISSMATS_GHIDRA_PATH, exist_ok=True)
