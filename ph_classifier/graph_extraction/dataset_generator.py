@@ -1,42 +1,27 @@
 #!/usr/bin/env python3
-
-class UnspecifiedCallGraphGeneratorError(ValueError):
-    def __init__(self):
-        super().__init__(
-            "You must specify the Call Graph generator to proceed.\n"
-            "Valid options are:\n"
-                "\t--radare2\n"
-                "\t--ghidra"
-        )
-
-
 import glob
 import os
 import sys
-import radare2_extract_custom_gcg as r2_gcg
+import ph_classifier.graph_extraction.radare2_extract_custom_gcg as r2_gcg
+from ph_classifier.paths import *
 
-
-DATASET_SAMPLES_PATH = "../dataset/samples"
-GENERATED_GRAPHS_BASE_PATH = "../dataset/graphs"
 PACKED_FILES = glob.iglob(f"{DATASET_SAMPLES_PATH}/*")
 
 
 if '--radare2' in sys.argv:
     gcg = r2_gcg
     cg_extractor = 'radare2'
+    GENERATED_GRAPHS_PATH = GENERATED_GRAPHS_RADARE2_PATH
+    GENERATED_GRAPHVIZ_PATH = GENERATED_GRAPHVIZ_RADARE2_PATH
 elif '--ghidra' in sys.argv:
     raise ValueError('This will be implemented later')
+    #gcg = ghidra_gcg
     #cg_extractor = 'ghidra'
+    #GENERATED_GRAPHS_PATH = GENERATED_GRAPHS_GHIDRA_PATH
+    #GENERATED_GRAPHVIZ_PATH = GENERATED_GRAPHVIZ_GHIDRA_PATH
 else:
     raise UnspecifiedCallGraphGeneratorError()
 
-GENERATED_GRAPHS_PATH = os.path.join(GENERATED_GRAPHS_BASE_PATH, cg_extractor)
-os.makedirs(GENERATED_GRAPHS_PATH, exist_ok=True)
-
-GENERATED_GRAPHVIZ_PATH = os.path.join(
-    GENERATED_GRAPHS_BASE_PATH, f'{cg_extractor}_graphviz'
-)
-os.makedirs(GENERATED_GRAPHVIZ_PATH, exist_ok=True)
 
 discarded_list = []
 

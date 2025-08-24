@@ -1,5 +1,5 @@
-from graphembeddingnetwork import GraphEmbeddingNet
-from graphembeddingnetwork import GraphPropLayer
+from .graphembeddingnetwork import GraphEmbeddingNet
+from .graphembeddingnetwork import GraphPropLayer
 import torch
 
 

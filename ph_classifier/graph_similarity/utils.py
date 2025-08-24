@@ -1,7 +1,7 @@
 import collections
-from train_dataset import TrainingPackedGraphSimilarityDataset
-from graphembeddingnetwork import GraphEmbeddingNet, GraphEncoder, GraphAggregator
-from graphmatchingnetwork import GraphMatchingNet
+from .train_dataset import TrainingPackedGraphSimilarityDataset
+from .graphembeddingnetwork import GraphEmbeddingNet, GraphEncoder, GraphAggregator
+from .graphmatchingnetwork import GraphMatchingNet
 import copy
 import torch
 import pickle

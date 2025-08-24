@@ -1,7 +1,9 @@
-from evaluation import compute_similarity, auc
-from loss import pairwise_loss
-from utils import *
-from configure import *
+from ph_classifier.graph_similarity.evaluation import compute_similarity, auc
+from ph_classifier.graph_similarity.loss import pairwise_loss
+from ph_classifier.graph_similarity.utils import *
+from ph_classifier.graph_similarity.configure import *
+from ph_classifier.paths import *
+
 import numpy as np
 import torch.nn as nn
 import collections
@@ -9,18 +11,24 @@ import time
 import random
 import math
 import gc
-
-TRAIN_SIZE = 100
-MODEL_PATH = '../paper_evaluation/experiments/trainsetsize/' + str(TRAIN_SIZE) + '/packware_' + str(TRAIN_SIZE) + '.pt'
-# Change this path to the dataset folder
-DATASET_PATH = "../paper_evaluation/graph_datasets/packware/train/" + str(TRAIN_SIZE) + "/"
+import sys
 
 PAIRS_PROP = 1 # % of the pairs are used, increase or decrease this value to change the number of pairs used
 
 early_stopping = "train" # "train" or "val"
 epsilon = 1e-2 # Minimum improvement to consider as improvement
 
+def set_dataset_model_path() -> tuple[str, str]:
+    if '--radare2' in sys.argv:
+        return GRAPHS_TRAIN_RADARE2_PATH, MODEL_RADARE2_PATH
+    elif '--ghidra' in sys.argv:
+        return GRAPHS_TRAIN_GHIDRA_PATH, MODEL_GHIDRA_PATH
+    else:
+        raise UnspecifiedCallGraphGeneratorError()
+
+
 def main():
+    DATASET_PATH, MODEL_PATH = set_dataset_model_path()
 
     # Set GPU
     use_cuda = torch.cuda.is_available()
@@ -161,8 +169,8 @@ def main():
                     if ((i_iter + 1) // config['training']['print_after'] % config['training']['eval_after'] == 0) or i_iter == config['training']['n_training_steps'] - 1:
                         model.eval()
                         with torch.no_grad():
-                            similarities = torch.tensor([])
-                            y_val = torch.tensor([])
+                            similarities_list = []
+                            y_val_list = []
                             for batch in dataset.pairs(config['evaluation']['batch_size'], type = 'val'):
                                 node_features, edge_features, from_idx, to_idx, graph_idx, labels = get_graph(batch)
                                 labels = labels.to(device)
@@ -173,9 +181,11 @@ def main():
                                 x, y = reshape_and_split_tensor(eval_pairs, 2)
                                 similarity = compute_similarity(config, x, y)
 
-                                similarities = torch.concatenate((similarities, similarity))
-                                y_val = torch.concatenate((y_val, labels))
+                                similarities_list.append(similarity)
+                                y_val_list.append(labels)
 
+                            similarities = torch.cat(similarities_list)
+                            y_val = torch.cat(y_val_list)
                             # AUC metric computation
                             pair_auc = auc(similarities, y_val)
 

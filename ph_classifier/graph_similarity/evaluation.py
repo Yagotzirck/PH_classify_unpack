@@ -1,5 +1,6 @@
+import torch
 from sklearn import metrics
-from loss import *
+from .loss import pairwise_loss, euclidean_distance, cosine_similarity
 
 def exact_hamming_similarity(x, y):
     """Compute the binary Hamming similarity."""
