@@ -83,7 +83,7 @@ os.makedirs(GENERATED_GRAPHVIZ_GHIDRA_PATH, exist_ok=True)
 
 
 #####################################################################
-# Generated training files' base folder
+# Generated training files' base folders
 #####################################################################
 TRAINING_GEN_FILES_BASE_PATH = rel_to_abs_path('./training_gen_files')
 os.makedirs(TRAINING_GEN_FILES_BASE_PATH, exist_ok=True)
@@ -142,16 +142,24 @@ FIXED_THRESHOLDS_GHIDRA_PATH = os.path.join(
     'fixed_thresholds.pkl'
 )
 #####################################################################
-# Cluster-related folders and files
+# Clustering-related files
 #####################################################################
-CLUSTERS_RADARE2_PATH   = os.path.join(
+FIXED_THRESHOLDS_INTRACLUSTER_RADARE2_PATH   = os.path.join(
     TRAINING_GEN_FILES_RADARE2_PATH,
-    'clusters/'
+    'fixed_thresholds_intracluster.pkl'
 )
-os.makedirs(CLUSTERS_RADARE2_PATH, exist_ok=True)
 
-CLUSTERS_GHIDRA_PATH    = os.path.join(
+FIXED_THRESHOLDS_INTRACLUSTER_GHIDRA_PATH   = os.path.join(
     TRAINING_GEN_FILES_GHIDRA_PATH,
-    'clusters/'
+    'fixed_thresholds_intracluster.pkl'
 )
-os.makedirs(CLUSTERS_GHIDRA_PATH, exist_ok=True)
+
+CLUSTERING_RADARE2_PATH    = os.path.join(
+    TRAINING_GEN_FILES_RADARE2_PATH,
+    'clustering.pkl'
+)
+
+CLUSTERING_GHIDRA_PATH    = os.path.join(
+    TRAINING_GEN_FILES_GHIDRA_PATH,
+    'clustering.pkl'
+)
