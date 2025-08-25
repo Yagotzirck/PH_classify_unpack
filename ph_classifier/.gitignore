@@ -176,5 +176,4 @@ log*.txt
 paper_evaluation/
 dataset/
 *.ipynb
-model/
-dissmats/
+training_gen_files/

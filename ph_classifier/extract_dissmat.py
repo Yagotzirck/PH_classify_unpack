@@ -13,14 +13,16 @@ from .tool_dependencies.utils import *
 from .graph_similarity.evaluation import compute_similarity
 from . import paths
 
-def packers_paths_setup(cg_extractor: str) -> tuple[set[str], str, str, str]:
+def packers_paths_setup(cg_extractor: str) -> tuple[set[str], str, str, str, str]:
     if cg_extractor == '--radare2':
         DB_PATH = paths.GRAPHS_TRAIN_RADARE2_PATH
         DISSMATS_PATH = paths.DISSMATS_RADARE2_PATH
+        FIXED_THRESHOLDS_PATH = paths.FIXED_THRESHOLDS_RADARE2_PATH
         MODEL_PATH = paths.MODEL_RADARE2_PATH
     elif cg_extractor == '--ghidra':
         DB_PATH = paths.GRAPHS_TRAIN_GHIDRA_PATH
         DISSMATS_PATH = paths.DISSMATS_GHIDRA_PATH
+        FIXED_THRESHOLDS_PATH = paths.FIXED_THRESHOLDS_GHIDRA_PATH
         MODEL_PATH = paths.MODEL_GHIDRA_PATH
     else:
         raise paths.UnspecifiedCallGraphGeneratorError()
@@ -32,11 +34,11 @@ def packers_paths_setup(cg_extractor: str) -> tuple[set[str], str, str, str]:
         )
     )
     
-    return PACKERS, DB_PATH, DISSMATS_PATH, MODEL_PATH
+    return PACKERS, DB_PATH, DISSMATS_PATH, FIXED_THRESHOLDS_PATH, MODEL_PATH
 
 
 def extract_dissmat(cg_extractor: str):
-    PACKERS, DB_PATH, DISSMATS_PATH, MODEL_PATH = packers_paths_setup(cg_extractor)
+    PACKERS, DB_PATH, DISSMATS_PATH, FIXED_THRESHOLDS_PATH, MODEL_PATH = packers_paths_setup(cg_extractor)
 
     use_cuda = torch.cuda.is_available()
     device = torch.device('cuda' if use_cuda else 'cpu')
@@ -124,13 +126,8 @@ def extract_dissmat(cg_extractor: str):
         min_similarity = cosine_similarity_matrix.stack().mean() - cosine_similarity_matrix.stack().std()
         print(f"Adjusted mean similarity for {packer}: {min_similarity}")
 
-        fixed_thresholds_path = os.path.join(
-            DISSMATS_PATH,
-            'fixed_thresholds.pkl'
-        )
-
-        if os.path.exists(fixed_thresholds_path):
-            with open(fixed_thresholds_path, "rb") as f:
+        if os.path.exists(FIXED_THRESHOLDS_PATH):
+            with open(FIXED_THRESHOLDS_PATH, "rb") as f:
                 thresholds = pickle.load(f)
             thresholds[packer] = min_similarity
         else:
@@ -138,7 +135,7 @@ def extract_dissmat(cg_extractor: str):
 
         print(thresholds)
 
-        with open(fixed_thresholds_path, 'wb') as f:
+        with open(FIXED_THRESHOLDS_PATH, 'wb') as f:
             pickle.dump(thresholds, f)
 
 
