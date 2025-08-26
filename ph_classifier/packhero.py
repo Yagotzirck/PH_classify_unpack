@@ -6,17 +6,15 @@ import math
 from os import listdir
 from collections import defaultdict
 from progress.bar import IncrementalBar
+import types
 
-from tool_dependencies.extract_custom_gcg import *
-from tool_dependencies.configure import *
-from tool_dependencies.tool_dataset import *
-from tool_dependencies.utils import *
-from tool_dependencies.evaluation import *
+from .graph_extraction import radare2_extract_custom_gcg as r2_gcg
+from .graph_similarity.configure import *
+from .tool_dependencies.tool_dataset import *
+from .tool_dependencies.utils import *
+from .graph_similarity.evaluation import *
+from . import paths
 
-
-MODEL_PATH = 'paper_evaluation/experiments_ph/trainsetsize/100/packware_100.pt'
-DB_PATH = 'paper_evaluation/graph_datasets/packware/entire/train/100/'
-CLUSTERING_PATH = 'paper_evaluation/experiments_ph/trainsetsize/100/clustering.pkl'
 
 THRESHOLD_MEDOIDS_SIMILARITY = 0.8 # default THRESHOLD for cosine similarity between input and clusterings medoids
 THRESHOLD_CLUSTERING_SIMILARITY = 0.95 # default THRESHOLD for cosine similarity between input and selected clusterings
@@ -25,7 +23,39 @@ THRESHOLD_MAJORITY_SIMILARITY = 0.6 # default THRESHOLD for cosine similarity in
 THRESHOLD_MAJORITY_MATCH = 0.1 # default THRESHOLD proportion of matches in majority mode
 THRESHOLD_MEAN = 0.6 # default THRESHOLD for cosine similarity in mean mode
 
-def file_analysis(filepath, toolmode, discard, threshold_majority_similarity, threshold_majority_match, threshold_mean):
+def paths_setup(cg_extractor: str) -> tuple[str, str, str, types.ModuleType]:
+    if cg_extractor == '--radare2':
+        MODEL_PATH = paths.MODEL_RADARE2_PATH
+        DB_PATH = paths.GRAPHS_TRAIN_RADARE2_PATH
+        CLUSTERING_PATH = paths.CLUSTERING_RADARE2_PATH
+        gcg = r2_gcg
+    elif cg_extractor == '--ghidra':
+        raise ValueError('This will be implemented later')
+        MODEL_PATH = paths.MODEL_GHIDRA_PATH
+        DB_PATH = paths.GRAPHS_TRAIN_GHIDRA_PATH
+        CLUSTERING_PATH = paths.CLUSTERING_GHIDRA_PATH
+        gcg = ghidra_gcg
+    else:
+        raise paths.UnspecifiedCallGraphGeneratorError()
+    
+    return MODEL_PATH, DB_PATH, CLUSTERING_PATH, gcg
+
+def file_analysis(
+    filepath: str,
+    toolmode: str,
+    discard: bool,
+    threshold_majority_similarity: float,
+    threshold_majority_match: float,
+    threshold_mean: float,
+    db_path: str,
+    clustering_path: str,
+    normalization_mean: float,
+    normalization_std: float,
+    config: dict,
+    device,
+    model,
+    gcg: types.ModuleType
+):
 
     print("filename: " + filepath.split("/")[-1])
 
@@ -35,9 +65,9 @@ def file_analysis(filepath, toolmode, discard, threshold_majority_similarity, th
         # extract call graph from PE file
         print("Extracting call graph from PE file...")
         if not discard:
-            G = extract_gcg(filepath, discard=False)
+            G = gcg.extract_gcg(filepath, discard=False)
         else:
-            G = extract_gcg(filepath)
+            G = gcg.extract_gcg(filepath)
 
         # Due to the matching method, the assumption we made is that the graph extracted from the PE file has less than 200 nodes
         if G == None:
@@ -46,7 +76,7 @@ def file_analysis(filepath, toolmode, discard, threshold_majority_similarity, th
 
         tmp_file = tempfile.NamedTemporaryFile(suffix=".xml")
         graph_path = tmp_file.name
-        save_graph_networkx(G, graph_path)
+        gcg.save_graph_networkx(G, graph_path)
         print("Graph extracted!")
 
     # Mode tool with xml files (graphs already extracted)
@@ -66,13 +96,13 @@ def file_analysis(filepath, toolmode, discard, threshold_majority_similarity, th
         # Clustering mode
         if toolmode == "--clustering":
             
-            with open(CLUSTERING_PATH, 'rb') as f:
+            with open(clustering_path, 'rb') as f:
                 clusters_info = pickle.load(f)
 
             print("Selecting the closer cluster(s)...")
 
             medoids = [clusters_info['filenames'][index] for index in clusters_info['medoids']]
-            dataset_medoids = PackedGraphSimilarityPairs(DB_PATH,graph_path,normalization_mean,normalization_std, included_files=medoids)
+            dataset_medoids = PackedGraphSimilarityPairs(db_path,graph_path,normalization_mean,normalization_std, included_files=medoids)
 
             similarities = np.array([])
 
@@ -98,7 +128,7 @@ def file_analysis(filepath, toolmode, discard, threshold_majority_similarity, th
             print("Closer clusters' medoid: ", closer_clusters_medoids)
 
             filenames = [clusters_info['filenames'][index] for index in range(len(clusters_info['filenames'])) if clusters_info['cluster_labels'][index] in closer_clusters_indexes]
-            dataset = PackedGraphSimilarityPairs(DB_PATH,graph_path,normalization_mean,normalization_std, included_files=filenames)
+            dataset = PackedGraphSimilarityPairs(db_path,graph_path,normalization_mean,normalization_std, included_files=filenames)
 
             bar = IncrementalBar('Comparison', max = dataset.get_db_size())
 
@@ -163,7 +193,7 @@ def file_analysis(filepath, toolmode, discard, threshold_majority_similarity, th
         else:
 
             # Test dataset to evaluate the model
-            dataset = PackedGraphSimilarityPairs(DB_PATH,graph_path,normalization_mean,normalization_std)
+            dataset = PackedGraphSimilarityPairs(db_path,graph_path,normalization_mean,normalization_std)
 
             bar = IncrementalBar('Comparison', max = dataset.get_db_size())
 
@@ -239,54 +269,97 @@ def file_analysis(filepath, toolmode, discard, threshold_majority_similarity, th
         # close tmp file (only for PE mode)
         tmp_file.close()
 
-# Set GPU
-use_cuda = torch.cuda.is_available()
-use_cuda = False
-device = torch.device('cuda' if use_cuda else 'cpu')
 
-# import configuration
-config = get_default_config()
+def main():
+    # Set GPU
+    use_cuda = torch.cuda.is_available()
+    use_cuda = False
+    device = torch.device('cuda' if use_cuda else 'cpu')
 
-db_dataset = TrainingPackedGraphSimilarityDataset(DB_PATH,validation_size=config['data']['dataset_params']['validation_size'])
-# Extract normalization metrics from db
-normalization_mean, normalization_std, features_order = db_dataset.get_node_statistics()
-# Retrieve node and edge feature dimension
-node_feature_dim, edge_feature_dim = db_dataset.get_features_dim()
+    # import configuration
+    config = get_default_config()
 
-# Build model from saved weights
-model, optimizer = build_model(config, node_feature_dim, edge_feature_dim)
-model.to(device)
-model.load_state_dict(torch.load(MODEL_PATH))
+    if sys.argv[-1] in ('--radare2', '--ghidra'):
+        cg_extractor = sys.argv[-1]
+    else:
+        raise paths.UnspecifiedCallGraphGeneratorError()
 
-# Extract info from the argvs
-toolmode = sys.argv[1]
+    MODEL_PATH, DB_PATH, CLUSTERING_PATH, gcg = paths_setup(cg_extractor)
 
-if len(sys.argv) > 3 and sys.argv[3] == "--nodiscard":
-    discard = False
-else:
-    discard = True
 
-print("identification mode: " + toolmode[2:] + "\n")
+    db_dataset = TrainingPackedGraphSimilarityDataset(DB_PATH,validation_size=config['data']['dataset_params']['validation_size'])
+    # Extract normalization metrics from db
+    normalization_mean, normalization_std, features_order = db_dataset.get_node_statistics()
+    # Retrieve node and edge feature dimension
+    node_feature_dim, edge_feature_dim = db_dataset.get_features_dim()
 
-# Directory mode
-if (sys.argv[2].endswith("/")):
+    # Build model from saved weights
+    model, optimizer = build_model(config, node_feature_dim, edge_feature_dim)
+    model.to(device)
+    model.load_state_dict(torch.load(MODEL_PATH))
 
-    print("Directory mode\n")
+    # Extract info from the argvs
+    toolmode = sys.argv[1]
 
-    filenames = listdir(sys.argv[2])
-    filenames.sort()
-    
-    for filename in filenames:
+    if len(sys.argv) > 3 and sys.argv[3] == "--nodiscard":
+        discard = False
+    else:
+        discard = True
 
-        filepath = sys.argv[2] + filename
-        file_analysis(filepath, toolmode, discard, THRESHOLD_MAJORITY_SIMILARITY, THRESHOLD_MAJORITY_MATCH, THRESHOLD_MEAN)
-        print("\n--------------------------------\n")
+    print("identification mode: " + toolmode[2:] + "\n")
 
-# File mode
-else:
+    # Directory mode
+    if (sys.argv[2].endswith("/")):
 
-    print("File mode\n")
+        print("Directory mode\n")
 
-    filepath = sys.argv[2]
+        filenames = listdir(sys.argv[2])
+        filenames.sort()
+        
+        for filename in filenames:
 
-    file_analysis(filepath, toolmode, discard, THRESHOLD_MAJORITY_SIMILARITY, THRESHOLD_MAJORITY_MATCH, THRESHOLD_MEAN)
+            filepath = sys.argv[2] + filename
+            print("\n--------------------------------\n")
+            file_analysis(
+                filepath,
+                toolmode,
+                discard,
+                THRESHOLD_MAJORITY_SIMILARITY,
+                THRESHOLD_MAJORITY_MATCH,
+                THRESHOLD_MEAN,
+                DB_PATH,
+                CLUSTERING_PATH,
+                normalization_mean,
+                normalization_std,
+                config,
+                device,
+                model,
+                gcg
+            )
+
+    # File mode
+    else:
+
+        print("File mode\n")
+
+        filepath = sys.argv[2]
+
+        file_analysis(
+            filepath,
+            toolmode,
+            discard,
+            THRESHOLD_MAJORITY_SIMILARITY,
+            THRESHOLD_MAJORITY_MATCH,
+            THRESHOLD_MEAN,
+            DB_PATH,
+            CLUSTERING_PATH,
+            normalization_mean,
+            normalization_std,
+            config,
+            device,
+            model,
+            gcg
+        )
+
+if __name__ == '__main__':
+    main()
