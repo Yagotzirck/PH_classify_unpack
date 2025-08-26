@@ -8,12 +8,22 @@ import tempfile
 import networkx as nx
 import matplotlib.pyplot as plt
 
+import os
 from collections import deque, defaultdict
 
 MAX_NUM_NODES = 500
 
 def save_graph_networkx(G, save_filepath):
-    nx.write_graphml(G, save_filepath + ".xml")
+    file_path = os.path.dirname(save_filepath)
+    filename_no_ext = os.path.splitext(
+        os.path.basename(save_filepath)
+    )[0]
+
+    save_filepath = os.path.join(
+        file_path,
+        f'{filename_no_ext}.xml'
+    )
+    nx.write_graphml(G, save_filepath)
 
 def save_graph_pdf(dot_graph, save_filepath):
     s = Source(dot_graph)
