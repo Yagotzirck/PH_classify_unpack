@@ -3,7 +3,7 @@ import torch
 import tempfile
 import time
 import math
-from os import listdir
+import os
 from collections import defaultdict
 from progress.bar import IncrementalBar
 import types
@@ -55,9 +55,9 @@ def file_analysis(
     device,
     model,
     gcg: types.ModuleType
-):
+) -> tuple[str, str]: # Returns a tuple (filename, identified_packer)
 
-    print("filename: " + filepath.split("/")[-1])
+    print(f"filename: {os.path.basename(filepath)}")
 
     # Tool runned in standard mode (PE file as input), so it has to extract the graph from the PE file before the evaluation
     if not filepath.endswith(".xml"):
@@ -268,9 +268,19 @@ def file_analysis(
 
         # close tmp file (only for PE mode)
         tmp_file.close()
+    
+    return (
+        os.path.basename(filepath),
+        identified_packer.partition(' ')[0]
+    )
 
 
-def main():
+def classifier(
+    toolmode: str, # e.g. '--clustering'
+    fileOrDirPath: str,
+    cg_extractor: str, # '--radare2' or '--ghidra'
+    discard: bool = True
+) -> list[tuple[str, str]]: # List of tuples (filename, identified_packer)
     # Set GPU
     use_cuda = torch.cuda.is_available()
     use_cuda = False
@@ -279,13 +289,7 @@ def main():
     # import configuration
     config = get_default_config()
 
-    if sys.argv[-1] in ('--radare2', '--ghidra'):
-        cg_extractor = sys.argv[-1]
-    else:
-        raise paths.UnspecifiedCallGraphGeneratorError()
-
     MODEL_PATH, DB_PATH, CLUSTERING_PATH, gcg = paths_setup(cg_extractor)
-
 
     db_dataset = TrainingPackedGraphSimilarityDataset(DB_PATH,validation_size=config['data']['dataset_params']['validation_size'])
     # Extract normalization metrics from db
@@ -298,29 +302,23 @@ def main():
     model.to(device)
     model.load_state_dict(torch.load(MODEL_PATH))
 
-    # Extract info from the argvs
-    toolmode = sys.argv[1]
-
-    if len(sys.argv) > 3 and sys.argv[3] == "--nodiscard":
-        discard = False
-    else:
-        discard = True
-
     print("identification mode: " + toolmode[2:] + "\n")
 
     # Directory mode
-    if (sys.argv[2].endswith("/")):
+    if (os.path.isdir(fileOrDirPath)):
 
         print("Directory mode\n")
 
-        filenames = listdir(sys.argv[2])
+        filenames = os.listdir(fileOrDirPath)
         filenames.sort()
+
+        classification_results = []
         
         for filename in filenames:
 
-            filepath = sys.argv[2] + filename
+            filepath = os.path.join(fileOrDirPath, filename)
             print("\n--------------------------------\n")
-            file_analysis(
+            classification_result = file_analysis(
                 filepath,
                 toolmode,
                 discard,
@@ -337,14 +335,18 @@ def main():
                 gcg
             )
 
+            classification_results.append(classification_result)
+        
+        return classification_results
+
     # File mode
     else:
 
         print("File mode\n")
 
-        filepath = sys.argv[2]
+        filepath = fileOrDirPath
 
-        file_analysis(
+        classification_result = file_analysis(
             filepath,
             toolmode,
             discard,
@@ -361,5 +363,23 @@ def main():
             gcg
         )
 
+        return [classification_result]
+
+
 if __name__ == '__main__':
-    main()
+    toolmode = sys.argv[1]
+    fileOrDirPath = sys.argv[2]
+
+    if len(sys.argv) > 3 and sys.argv[3] == "--nodiscard":
+        discard = False
+    else:
+        discard = True
+
+    cg_extractor = sys.argv[-1]
+
+    classifier(
+        toolmode,
+        fileOrDirPath,
+        cg_extractor,
+        discard
+    )
