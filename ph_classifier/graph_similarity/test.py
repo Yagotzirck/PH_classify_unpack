@@ -27,7 +27,7 @@ def test(
 
         sample_classifications = classifier(
             toolmode,
-            TEST_SET_PATH,
+            test_set_path,
             cg_extractor
         )
 
