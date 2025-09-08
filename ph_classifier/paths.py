@@ -24,6 +24,7 @@ def rel_to_abs_path(relative_path: str) -> str:
 # Dataset-related folders (samples and generated Call Graphs)
 #####################################################################
 DATASET_SAMPLES_PATH            = rel_to_abs_path("./dataset/samples/")
+DATASET_UNKNOWN_PACKERS_PATH    = rel_to_abs_path("./dataset/unknown_packers")
 GENERATED_GRAPHS_BASE_PATH      = rel_to_abs_path("./dataset/graphs/")
 
 GENERATED_GRAPHS_RADARE2_PATH   = os.path.join(
