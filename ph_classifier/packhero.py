@@ -57,7 +57,8 @@ def file_analysis(
     gcg: types.ModuleType
 ) -> tuple[str, str]: # Returns a tuple (filename, identified_packer)
 
-    print(f"filename: {os.path.basename(filepath)}")
+    filename = os.path.basename(filepath)
+    print(f"filename: {filename}")
 
     # Tool runned in standard mode (PE file as input), so it has to extract the graph from the PE file before the evaluation
     if not filepath.endswith(".xml"):
@@ -72,7 +73,10 @@ def file_analysis(
         # Due to the matching method, the assumption we made is that the graph extracted from the PE file has less than 200 nodes
         if G == None:
             print("Error: the graph extracted has more than 200 nodes!")
-            exit(1)
+            return (
+                filename,
+                'Over 200 nodes'
+            )
 
         tmp_file = tempfile.NamedTemporaryFile(suffix=".xml")
         graph_path = tmp_file.name
@@ -119,10 +123,10 @@ def file_analysis(
                     for i in range(dataset_medoids.get_db_size()):
                         similarities = np.append(similarities, similarity[i].item())
 
-            # Get the closer cluster
+            # Get the closest cluster
             closer_clusters_medoids = [medoids[i] for i in range(len(similarities)) if similarities[i] > THRESHOLD_MEDOIDS_SIMILARITY]
             if closer_clusters_medoids == []:
-                return None
+                return (filename, 'Unknown')
             closer_clusters_indexes = [clusters_info['cluster_labels'][clusters_info['filenames'].index(closer_cluster_medoid)] for closer_cluster_medoid in closer_clusters_medoids]
 
             print("Closer clusters' medoid: ", closer_clusters_medoids)
@@ -270,7 +274,7 @@ def file_analysis(
         tmp_file.close()
     
     return (
-        os.path.basename(filepath),
+        filename,
         identified_packer.partition(' ')[0]
     )
 
