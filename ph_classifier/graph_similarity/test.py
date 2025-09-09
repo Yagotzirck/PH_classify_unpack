@@ -1,6 +1,12 @@
 import sys
 import os
 
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import ConfusionMatrixDisplay
+
+from collections import Counter
+
 from ph_classifier.packhero import classifier
 from ph_classifier import paths
 
@@ -48,6 +54,42 @@ def test(
         
         return packers_samples, num_total_samples
     
+    def create_confusion_matrix( 
+        packers_samples: dict[str, tuple[tuple[str, str]]]
+    ) -> tuple[np.ndarray, tuple[str, ...]]: 
+
+        packer_labels = (
+            *packers_samples.keys(),
+            'Unknown'
+        )
+        num_labels = len(packer_labels)
+
+        # Preallocate the confusion matrix
+        conf_mat = np.zeros(
+            (num_labels, num_labels),
+            dtype=int
+        )
+
+        label_to_idx = {
+            packer_label: packer_idx
+            for packer_idx, packer_label in enumerate(packer_labels)
+        }
+        
+        # Remove 'Unknown' label from packer_labels
+        for x, curr_row_label in enumerate(packer_labels[:-1]): 
+            curr_packer_classifications = packers_samples[curr_row_label]
+
+            classifications_count = Counter(
+                classification[1]
+                for classification in curr_packer_classifications
+            )
+
+            for classification, count in classifications_count.items():
+                y = label_to_idx[classification]
+                conf_mat[x,y] = count
+        
+        return conf_mat, packer_labels
+
 
     TEST_SET_PATH = paths_setup(cg_extractor)
     
@@ -57,21 +99,25 @@ def test(
         TEST_SET_PATH
     )
 
-    # Create a tuple of tuples (packer_name, correct_classifications, total_samples)
+    conf_mat, packer_labels = create_confusion_matrix(packers_samples)
+
+
+
+    # Create a tuple of tuples
+    # (packer_name, correct_classifications, total_samples)
     packers_stats = tuple(
         (
-            packer_name,
-            sum(
-                1
-                for sample in samples
-                if sample[0].partition('_')[0] == sample[1]
-            ),
-            len(samples)
+            packer_label,
+            conf_mat[i, i],
+            np.sum(conf_mat[i,:])
         )
-        for packer_name, samples in packers_samples.items()
+        # Remove 'Unknown' label from packer_labels
+        for i, packer_label in enumerate(packer_labels[:-1])
     )
 
     total_correct_classifications = 0
+
+    print(80 * '=')
     print(f"{'Packer':<30} | {'Correct':<10} | {'Total samples':<15} | {'Accuracy':<10}")
     print(80 * '-')
     for stat in packers_stats:
@@ -86,6 +132,16 @@ def test(
         f"{total_correct_classifications / num_total_samples:<10}"
     )
     print(80 * '-')
+
+    print("Showing confusion matrix")
+    disp = ConfusionMatrixDisplay(
+        confusion_matrix=conf_mat,
+        display_labels=packer_labels
+    )
+
+    disp.plot()
+    plt.xticks(rotation=90)
+    plt.show()
 
 
 def main():
