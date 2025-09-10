@@ -10,15 +10,17 @@ from collections import Counter
 from ph_classifier.packhero import classifier
 from ph_classifier import paths
 
-def paths_setup(cg_extractor: str) -> str:
+def paths_setup(cg_extractor: str) -> tuple[str, str]:
     if cg_extractor == '--radare2':
         TEST_SET_PATH = paths.GRAPHS_TEST_RADARE2_PATH
+        CLASSES_LIST_PATH = paths.CLASSES_LIST_RADARE2_PATH
     elif cg_extractor == '--ghidra':
         TEST_SET_PATH = paths.GRAPHS_TEST_GHIDRA_PATH
+        CLASSES_LIST_PATH = paths.CLASSES_LIST_GHIDRA_PATH
     else:
         raise paths.UnspecifiedCallGraphGeneratorError()
     
-    return TEST_SET_PATH
+    return TEST_SET_PATH, CLASSES_LIST_PATH
 
 def test(
     toolmode: str,      # e.g. '--clustering'
@@ -55,16 +57,23 @@ def test(
         return packers_samples, num_total_samples
     
     def create_confusion_matrix( 
-        packers_samples: dict[str, tuple[tuple[str, str]]]
+        packers_samples: dict[str, tuple[tuple[str, str]]],
+        model_classes: tuple[str, ...]
     ) -> tuple[np.ndarray, tuple[str, ...]]: 
 
-        packer_labels = (
+        packer_classifications = (
             *packers_samples.keys(),
+            'Unknown'
+        )
+
+        packer_labels = (
+            *sorted(model_classes),
             'Unknown'
         )
         num_labels = len(packer_labels)
 
         # Preallocate the confusion matrix
+
         conf_mat = np.zeros(
             (num_labels, num_labels),
             dtype=int
@@ -75,8 +84,8 @@ def test(
             for packer_idx, packer_label in enumerate(packer_labels)
         }
         
-        # Remove 'Unknown' label from packer_labels
-        for x, curr_row_label in enumerate(packer_labels[:-1]): 
+        # Remove 'Unknown' label from packer_classifications
+        for curr_row_label in packer_classifications[:-1]: 
             curr_packer_classifications = packers_samples[curr_row_label]
 
             classifications_count = Counter(
@@ -84,6 +93,7 @@ def test(
                 for classification in curr_packer_classifications
             )
 
+            x = label_to_idx[curr_row_label]
             for classification, count in classifications_count.items():
                 y = label_to_idx[classification]
                 conf_mat[x,y] = count
@@ -91,7 +101,7 @@ def test(
         return conf_mat, packer_labels
 
 
-    TEST_SET_PATH = paths_setup(cg_extractor)
+    TEST_SET_PATH, CLASSES_LIST_PATH = paths_setup(cg_extractor)
     
     packers_samples, num_total_samples = samples_grouped_by_packer(
         toolmode,
@@ -99,7 +109,10 @@ def test(
         TEST_SET_PATH
     )
 
-    conf_mat, packer_labels = create_confusion_matrix(packers_samples)
+    with open(CLASSES_LIST_PATH, 'r') as in_fp:
+        model_classes = tuple( line.strip() for line in in_fp )
+
+    conf_mat, packer_labels = create_confusion_matrix(packers_samples, model_classes)
 
 
 

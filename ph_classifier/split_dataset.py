@@ -39,16 +39,20 @@ def split_dataset(cg_extractor: str, train_perc: float):
 
     The test set proportion value will be simply given by
     (1 - train_perc).
+
+    It also saves the list of packers (classes) present in the dataset.
     """
 
     if cg_extractor == '--radare2':
-        graphs_path = GENERATED_GRAPHS_RADARE2_PATH
-        train_path  = GRAPHS_TRAIN_RADARE2_PATH
-        test_path   = GRAPHS_TEST_RADARE2_PATH
+        graphs_path =       GENERATED_GRAPHS_RADARE2_PATH
+        train_path  =       GRAPHS_TRAIN_RADARE2_PATH
+        test_path   =       GRAPHS_TEST_RADARE2_PATH
+        classes_list_path   = CLASSES_LIST_RADARE2_PATH
     elif cg_extractor == '--ghidra':
-        graphs_path = GENERATED_GRAPHS_GHIDRA_PATH
-        train_path  = GRAPHS_TRAIN_GHIDRA_PATH
-        test_path   = GRAPHS_TEST_GHIDRA_PATH
+        graphs_path =       GENERATED_GRAPHS_GHIDRA_PATH
+        train_path =        GRAPHS_TRAIN_GHIDRA_PATH
+        test_path =         GRAPHS_TEST_GHIDRA_PATH
+        classes_list_path = CLASSES_LIST_GHIDRA_PATH
     else:
         raise UnspecifiedCallGraphGeneratorError()
 
@@ -60,7 +64,15 @@ def split_dataset(cg_extractor: str, train_perc: float):
         packer = os.path.basename(sample).partition('_')[0]
         packers_samples[packer].append(sample)
     
+    # Save the list of dataset classes
+    with open(classes_list_path, 'w') as out_fp:
+        packers = '\n'.join(
+            packer_name
+            for packer_name in packers_samples.keys()
+        )
+        out_fp.write(packers)
 
+    # Split the dataset in training and test sets
     random.seed(42)
 
     for curr_packer_samples in packers_samples.values():

@@ -102,6 +102,19 @@ TRAINING_GEN_FILES_GHIDRA_PATH = os.path.join(
 os.makedirs(TRAINING_GEN_FILES_GHIDRA_PATH, exist_ok=True)
 
 #####################################################################
+# List of dataset classes' paths 
+#####################################################################
+CLASSES_LIST_RADARE2_PATH = os.path.join(
+    TRAINING_GEN_FILES_RADARE2_PATH,
+    'classes_list_radare2.txt'
+)
+
+CLASSES_LIST_GHIDRA_PATH = os.path.join(
+    TRAINING_GEN_FILES_GHIDRA_PATH,
+    'classes_list_ghidra.txt'
+)
+
+#####################################################################
 # Models' paths 
 #####################################################################
 MODEL_RADARE2_PATH  = os.path.join(
