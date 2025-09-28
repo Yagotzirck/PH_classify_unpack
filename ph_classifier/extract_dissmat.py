@@ -46,6 +46,13 @@ def extract_dissmat(cg_extractor: str):
     # import configuration
     config = get_default_config()
 
+    # Clear previously created dissimilarity matrices (if any)
+    for old_dissmat in glob.iglob(f'{DISSMATS_PATH}/*.pkl'):
+        os.remove(
+            os.path.join(DISSMATS_PATH, old_dissmat)
+        )
+
+
     db_dataset = TrainingPackedGraphSimilarityDataset(DB_PATH,validation_size=config['data']['dataset_params']['validation_size'])
     # Extract normalization metrics from db
     normalization_mean, normalization_std, features_order = db_dataset.get_node_statistics()
