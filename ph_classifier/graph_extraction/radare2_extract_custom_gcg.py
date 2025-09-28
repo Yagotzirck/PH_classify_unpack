@@ -106,7 +106,9 @@ def extract_gcg(filepath, discard = True):
     r2.cmd("aaa 2>/dev/null")
 
     # Get the list of functions of the binary checked by radare2
-    functions = r2.cmdj("aflj")
+    # NOTE: replaced "aflj" with "afllj"; see the following link:
+    # https://github.com/radareorg/radare2/issues/22226#issuecomment-1710594722
+    functions = r2.cmdj("afllj")
     # Initialize the graph
     G = nx.DiGraph()
 
@@ -121,8 +123,9 @@ def extract_gcg(filepath, discard = True):
             return None
 
         # Stop if number of edges is greater than 0 (there is one connected component)
-        if G.number_of_edges() > 0:
-            break
+        # NOTE: this made the graph skip some nodes (functions), so I'm commenting it out
+        #if G.number_of_edges() > 0:
+        #     break
 
         to_explore = deque()
         to_explore.append(function)
