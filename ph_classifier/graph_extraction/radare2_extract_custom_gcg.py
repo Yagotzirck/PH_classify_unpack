@@ -123,9 +123,8 @@ def extract_gcg(filepath, discard = True):
             return None
 
         # Stop if number of edges is greater than 0 (there is one connected component)
-        # NOTE: this made the graph skip some nodes (functions), so I'm commenting it out
-        #if G.number_of_edges() > 0:
-        #     break
+        if G.number_of_edges() > 0:
+            break
 
         to_explore = deque()
         to_explore.append(function)
