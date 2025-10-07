@@ -53,9 +53,6 @@ def prepare_features(function):
 
     features = {}
     features["size"] = function["size"] # size of the function
-    features["is-pure"] = int(function["is-pure"] == "true") # is the function pure (has any side effect)?
-    features["realsz"] = function["realsz"] # real size of the function (include any padding)
-    features["cc"] = function["cc"] # number of calling convention
     features["nbbs"] = function["nbbs"] # number of basic blocks
     features["ninstrs"] = function["ninstrs"] # number of instructions
     features["edges"] = function["edges"] # number of edges
@@ -71,24 +68,6 @@ def prepare_features(function):
     else:
         features["nargs"] = 0
     
-    # type of the function (extracted from the name assigned by radare2)
-    features["type_fcn"] = features["type_int"] = features["type_sym"] = features["type_loc"] = features["type_imp"] = features["type_sub"] = features["type_entry"] = 0
-    if function["name"].startswith("entry"):
-        features["type_entry"] = 1
-    elif function["name"].startswith("fcn"):
-        features["type_fcn"] = 1
-    elif function["name"].startswith("int"):
-        features["type_int"] = 1
-    elif function["name"].startswith("sym"):
-        features["type_sym"] = 1
-    elif function["name"].startswith("loc"):
-        features["type_loc"] = 1
-    elif function["name"].startswith("sub"):
-        features["type_sub"] = 1
-    
-    if function["name"].startswith("imp") or function["name"][4:].startswith("imp"):
-        features["type_imp"] = 1
-
     return features
 
 # This function extracts the global callgraph manually by iterating on all functions radare2 detects ("aflj" command)
