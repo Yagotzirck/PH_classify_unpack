@@ -5,6 +5,7 @@ import sys
 import types
 
 import ph_classifier.graph_extraction.radare2_extract_custom_gcg as r2_gcg
+import ph_classifier.graph_extraction.ghidra_extract_custom_gcg as ghidra_gcg
 from ph_classifier.paths import *
 
 PACKED_FILES = glob.iglob(f"{DATASET_SAMPLES_PATH}/*")
@@ -17,11 +18,10 @@ def paths_setup(cg_extractor: str) -> tuple[types.ModuleType, str, str, str]:
         GENERATED_GRAPHS_PATH = GENERATED_GRAPHS_RADARE2_PATH
         GENERATED_GRAPHVIZ_PATH = GENERATED_GRAPHVIZ_RADARE2_PATH
     elif cg_extractor == '--ghidra':
-        raise ValueError('This will be implemented later')
-        #gcg = ghidra_gcg
-        #cg_extractor = 'ghidra'
-        #GENERATED_GRAPHS_PATH = GENERATED_GRAPHS_GHIDRA_PATH
-        #GENERATED_GRAPHVIZ_PATH = GENERATED_GRAPHVIZ_GHIDRA_PATH
+        gcg = ghidra_gcg
+        cg_extractor = 'ghidra'
+        GENERATED_GRAPHS_PATH = GENERATED_GRAPHS_GHIDRA_PATH
+        GENERATED_GRAPHVIZ_PATH = GENERATED_GRAPHVIZ_GHIDRA_PATH
     else:
         raise UnspecifiedCallGraphGeneratorError()
     

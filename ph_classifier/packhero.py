@@ -9,6 +9,7 @@ from progress.bar import IncrementalBar
 import types
 
 from .graph_extraction import radare2_extract_custom_gcg as r2_gcg
+from .graph_extraction import ghidra_extract_custom_gcg as ghidra_gcg
 from .graph_similarity.configure import *
 from .tool_dependencies.tool_dataset import *
 from .tool_dependencies.utils import *
@@ -30,7 +31,6 @@ def paths_setup(cg_extractor: str) -> tuple[str, str, str, types.ModuleType]:
         CLUSTERING_PATH = paths.CLUSTERING_RADARE2_PATH
         gcg = r2_gcg
     elif cg_extractor == '--ghidra':
-        raise ValueError('This will be implemented later')
         MODEL_PATH = paths.MODEL_GHIDRA_PATH
         DB_PATH = paths.GRAPHS_TRAIN_GHIDRA_PATH
         CLUSTERING_PATH = paths.CLUSTERING_GHIDRA_PATH
