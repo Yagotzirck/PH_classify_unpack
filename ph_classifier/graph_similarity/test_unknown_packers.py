@@ -65,7 +65,7 @@ def test(
         
         
         # Samples for which the tool couldn't extract the graph don't count
-        curr_packer_count -= packer_stats.get('Over 200 nodes', 0)
+        curr_packer_count -= packer_stats.get('Invalid graph', 0)
 
         unknown_count = packer_stats['Unknown']
         unknown_ratio = unknown_count / curr_packer_count

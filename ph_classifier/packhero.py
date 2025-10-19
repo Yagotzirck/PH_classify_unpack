@@ -70,12 +70,11 @@ def file_analysis(
         else:
             G = gcg.extract_gcg(filepath)
 
-        # Due to the matching method, the assumption we made is that the graph extracted from the PE file has less than 200 nodes
         if G == None:
-            print("Error: the graph extracted has more than 200 nodes!")
+            print("Error: the graph is invalid and has been discarded")
             return (
                 filename,
-                'Over 200 nodes'
+                'Invalid graph'
             )
 
         tmp_file = tempfile.NamedTemporaryFile(suffix=".xml")
