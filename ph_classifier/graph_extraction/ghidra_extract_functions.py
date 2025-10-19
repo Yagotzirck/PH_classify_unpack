@@ -1,10 +1,7 @@
 import pyghidra
 pyghidra.start() # Otherwise we can't import ghidra modules
-from ghidra.program.model.block import BasicBlockModel  # type: ignore
-from ghidra.util.task import TaskMonitor                # type: ignore
 from ghidra.program.model.symbol import SymbolType      # type: ignore
 from ghidra.program.model.listing import Program        # type: ignore
-from ghidra.app.util.opinion import LoadException       # type: ignore
 
 import tempfile
 import hashlib
@@ -15,6 +12,20 @@ if typing.TYPE_CHECKING:
     from ghidra.program.flatapi import FlatProgramAPI       # type: ignore
     from ghidra.program.model.listing import Function       # type: ignore
     from ghidra.program.model.listing import Instruction    # type: ignore
+
+
+# The minimum amount of instructions for a binary
+# to be considered valid
+NUM_INSTRUCTIONS_THRESHOLD = 20
+
+class InsufficientInstructionsError(Exception):
+    def __init__(self, num_found: int, threshold: int):
+        msg = (
+            "Not enough instructions found\n"
+            f"\tCount: {num_found}"
+            f"\tThreshold: {threshold}"
+        )
+        super().__init__(msg)
 
 
 def ghidra_extract_functions(filepath: str) -> \
@@ -47,14 +58,14 @@ def ghidra_extract_functions(filepath: str) -> \
 
 
         feature_names = (
-            'size',
-            'num_basic_blocks',
-            'num_instrs',
-            'num_edges',
-            'indegree',
-            'outdegree',
-            'num_local_vars',
-            'num_params'
+            'stack',
+            'arithmetic',
+            'logical',
+            'comparative',
+            'uncond_jmp',
+            'cond_jmp',
+            'shift_rot',
+            'other'
         )
 
         # Set all fields for binary functions to 0
@@ -160,7 +171,6 @@ def ghidra_extract_functions(filepath: str) -> \
             called_funcs = defaultdict(set)
 
             prg_list = prg.getListing()
-            block_model = BasicBlockModel(prg)
 
             binary_functions = names_to_functions(
                 binary_functions_names,
@@ -168,27 +178,11 @@ def ghidra_extract_functions(filepath: str) -> \
                 prg
             )
 
+            num_prg_instructions = 0
+
             for curr_func, curr_func_name in zip(
                 binary_functions, binary_functions_names
             ):
-
-                funcs_features[curr_func_name]['num_local_vars'] = len(
-                    curr_func.getLocalVariables()
-                )
-
-                # getParameterCount() returns a JInt value, which causes
-                # problems with NetworkX later on.
-                # By summing 0 to it, we convert it to a Python int.
-                funcs_features[curr_func_name]['num_params'] = \
-                    curr_func.getParameterCount() + 0
-                
-                for block in block_model.getCodeBlocksContaining(
-                    curr_func.getBody(),
-                    TaskMonitor.DUMMY
-                ):
-                    funcs_features[curr_func_name]['num_basic_blocks'] += 1
-                    funcs_features[curr_func_name]['num_edges'] += \
-                        block.getNumDestinations(TaskMonitor.DUMMY)
 
                 instructions_iter = typing.cast(
                     typing.Iterable["Instruction"],
@@ -198,38 +192,77 @@ def ghidra_extract_functions(filepath: str) -> \
                     )
                 )
                 for instr in instructions_iter:
-                    funcs_features[curr_func_name]['num_instrs'] += 1
-                    funcs_features[curr_func_name]['size'] += instr.getLength()
+
+                    isJump = False
+                    num_prg_instructions += 1
 
                     for ref in instr.getReferencesFrom():
-                        # We consider jumps as well, since some packers might
-                        # execute calls in a sneaky way; for instance,
+                        # For function calls we consider jumps as well,
+                        # since some packers might execute calls
+                        # in a sneaky way; for instance,
                         # instead of CALL func:
                         # PUSH  ret_addr
                         # JMP   func
+                        refType = ref.getReferenceType()
                         if( 
-                            ref.getReferenceType().isCall() or
-                            ref.getReferenceType().isJump()
+                            refType.isCall() or
+                            refType.isJump()
                         ):
+                            isJump = True
+
                             dest_symbol = flat_api.getSymbolAt(
                                 ref.getToAddress()
                             )
+
                             if dest_symbol.getSymbolType() == SymbolType.FUNCTION:
+                                isJump = False
                                 called_func = dest_symbol.getName(True)
 
                                 # Ignore recursive calls
                                 if called_func != curr_func_name:
                                     called_funcs[curr_func_name].add(called_func)
 
-                funcs_features[curr_func_name]['outdegree'] = len(
-                    called_funcs[curr_func_name]
-                )
-    
-    # Set indegrees, except for the external (imported) functions
-    imported_functions_names = set(imported_functions_names)
-    for curr_func_name in binary_functions_names:
-        for called_func in called_funcs[curr_func_name] - imported_functions_names:
-            funcs_features[called_func]['indegree'] += 1
+                            elif refType.isUnConditional():
+                                funcs_features[curr_func_name]['uncond_jmp'] += 1
+                            else:
+                                funcs_features[curr_func_name]['cond_jmp'] += 1
+
+
+                    
+                    if not isJump:
+                        instr_mnemonic = instr.getMnemonicString().casefold()
+                        match instr_mnemonic:
+                            case    'push'  | 'pusha'   | 'pushf'   | \
+                                              'pushad'  | 'pushfd'  | \
+                                    'pop'   | 'popa'    | 'popf'    | \
+                                              'popad'   | 'popfd'   | \
+                                    'enter' | 'leave'   | 'ret':
+                                funcs_features[curr_func_name]['stack'] += 1
+                            
+                            case    'add'   | 'adc'     | 'inc'     | \
+                                    'sub'   | 'sbb'     | 'dec'     | \
+                                    'mul'   | 'imul'    | \
+                                    'div'   | 'idiv':
+                                funcs_features[curr_func_name]['arithmetic'] += 1
+                            
+                            case    'and'   | 'or'      | 'xor'     | 'not':
+                                funcs_features[curr_func_name]['logical'] += 1
+                            
+                            case    'cmp'   | 'test':
+                                funcs_features[curr_func_name]['comparative'] += 1
+                            
+                            case    'shl'   | 'sal'     | 'shr'     | 'sar' | \
+                                    'rol'   | 'ror'     | 'rcl'     | 'rcr':
+                                funcs_features[curr_func_name]['shift_rot'] += 1 
+                            
+                            case _:
+                                funcs_features[curr_func_name]['other'] += 1
+
+    if num_prg_instructions < NUM_INSTRUCTIONS_THRESHOLD:
+        raise InsufficientInstructionsError(
+            num_prg_instructions,
+            NUM_INSTRUCTIONS_THRESHOLD
+        )
 
     return funcs_features, called_funcs
 
