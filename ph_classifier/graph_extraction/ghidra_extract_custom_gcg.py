@@ -7,10 +7,10 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 import os
-import shutil
+import sys
 from collections import deque, defaultdict
 
-from .ghidra_extract_functions import ghidra_extract_functions, LoadException
+from .ghidra_extract_functions import ghidra_extract_functions
 
 MAX_NUM_NODES = 500
 
@@ -56,9 +56,10 @@ def extract_gcg(filepath, discard = True):
 
     try:
         funcs_features, called_funcs = ghidra_extract_functions(filepath)
-    except LoadException as e:
-        print('\t', e, sep='')
+    except Exception as e:
+        print('\t', e, sep='', file=sys.stderr)
         return None
+
 
     # Initialize the graph
     G = nx.DiGraph()
@@ -88,20 +89,25 @@ def extract_gcg(filepath, discard = True):
     try:
         entry_idx = extracted_funcs_names.index('entry')
     except ValueError:
-        print("\tEntry point not found; proceeding anyway...")
         # Ghidra might still detect some functions (e.g. NSPack),
         # so don't abort just yet
-        entry_idx = 0
-
-    extracted_funcs_names[0], extracted_funcs_names[entry_idx] = (
-        extracted_funcs_names[entry_idx],
-        extracted_funcs_names[0]
-    )
+        print("\tEntry point not found; proceeding anyway...")
+    else:
+        # Swap the entry point with the function in the list's 1st element
+        extracted_funcs_names[0], extracted_funcs_names[entry_idx] = (
+            extracted_funcs_names[entry_idx],
+            extracted_funcs_names[0]
+        )
 
     for func_name in extracted_funcs_names:
 
         # if more than MAX_NUM_NODES nodes return None (discard the sample)
         if G.number_of_nodes() > MAX_NUM_NODES and discard:
+            print(
+                f"\tThe graph has {G.number_of_nodes} nodes\n"
+                f"\t(max threshold: {MAX_NUM_NODES})",
+                file=sys.stderr
+            )
             return None
 
         # Stop if number of edges is greater than 0 (there is one connected component)
@@ -118,6 +124,11 @@ def extract_gcg(filepath, discard = True):
 
             # if more than MAX_NUM_NODES nodes return None (discard the sample)
             if G.number_of_nodes() > MAX_NUM_NODES and discard:
+                print(
+                    f"\tThe graph has {G.number_of_nodes} nodes\n"
+                    f"\t(max threshold: {MAX_NUM_NODES})",
+                    file=sys.stderr
+                )
                 return None
             
             # Pop from left of the dequeue a function and mark the function as explored
@@ -158,6 +169,10 @@ def extract_gcg(filepath, discard = True):
     G.remove_nodes_from(to_drop)
 
     if G.number_of_nodes() == 0:
+        print(
+            "No functions have been found in the sample",
+            file=sys.stderr
+        )
         return None
 
     return G
