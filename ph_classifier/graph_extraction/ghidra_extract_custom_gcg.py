@@ -104,7 +104,7 @@ def extract_gcg(filepath, discard = True):
         # if more than MAX_NUM_NODES nodes return None (discard the sample)
         if G.number_of_nodes() > MAX_NUM_NODES and discard:
             print(
-                f"\tThe graph has {G.number_of_nodes} nodes\n"
+                f"\tThe graph has {G.number_of_nodes()} nodes\n"
                 f"\t(max threshold: {MAX_NUM_NODES})",
                 file=sys.stderr
             )
@@ -125,7 +125,7 @@ def extract_gcg(filepath, discard = True):
             # if more than MAX_NUM_NODES nodes return None (discard the sample)
             if G.number_of_nodes() > MAX_NUM_NODES and discard:
                 print(
-                    f"\tThe graph has {G.number_of_nodes} nodes\n"
+                    f"\tThe graph has {G.number_of_nodes()} nodes\n"
                     f"\t(max threshold: {MAX_NUM_NODES})",
                     file=sys.stderr
                 )
