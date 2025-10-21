@@ -5,7 +5,7 @@ from ghidra.program.model.listing import Program        # type: ignore
 
 import tempfile
 import hashlib
-from collections import defaultdict
+from collections import defaultdict, Counter
 import typing
 
 if typing.TYPE_CHECKING:
@@ -17,6 +17,19 @@ if typing.TYPE_CHECKING:
 # The minimum amount of instructions for a binary
 # to be considered valid
 NUM_INSTRUCTIONS_THRESHOLD = 20
+
+# The minimum amount of instructions for the
+# entry point to keep it as a separate function.
+# Otherwise, if it calls a single function, merge it with the called function.
+# This is done because many packers tend to have a single JMP instruction in
+# the entry point, and this confuses the Graph Matching Network when it tries
+# to classify graphs with a similar topology
+#
+# (e.g. tElock and Eronana graphs have only two nodes, with the entry point
+# nodes being almost identical; unless both packers are included in the 
+# training set, the net confuses the external packer with the one included
+# in the training set).
+NUM_INSTRUCTIONS_EP_THRESHOLD = 10
 
 class InsufficientInstructionsError(Exception):
     def __init__(self, num_found: int, threshold: int):
@@ -65,6 +78,11 @@ def ghidra_extract_functions(filepath: str) -> \
             'uncond_jmp',
             'cond_jmp',
             'shift_rot',
+            'mov',
+            'lea',
+            'call_ret',
+            'string',
+            'bit_flag',
             'other'
         )
 
@@ -179,6 +197,7 @@ def ghidra_extract_functions(filepath: str) -> \
             )
 
             num_prg_instructions = 0
+            other_instrs = []
 
             for curr_func, curr_func_name in zip(
                 binary_functions, binary_functions_names
@@ -193,7 +212,6 @@ def ghidra_extract_functions(filepath: str) -> \
                 )
                 for instr in instructions_iter:
 
-                    isJump = False
                     num_prg_instructions += 1
 
                     for ref in instr.getReferencesFrom():
@@ -208,61 +226,148 @@ def ghidra_extract_functions(filepath: str) -> \
                             refType.isCall() or
                             refType.isJump()
                         ):
-                            isJump = True
 
                             dest_symbol = flat_api.getSymbolAt(
                                 ref.getToAddress()
                             )
 
                             if dest_symbol.getSymbolType() == SymbolType.FUNCTION:
-                                isJump = False
                                 called_func = dest_symbol.getName(True)
 
                                 # Ignore recursive calls
                                 if called_func != curr_func_name:
                                     called_funcs[curr_func_name].add(called_func)
 
-                            elif refType.isUnConditional():
-                                funcs_features[curr_func_name]['uncond_jmp'] += 1
-                            else:
-                                funcs_features[curr_func_name]['cond_jmp'] += 1
+                    instr_mnemonic = instr \
+                        .getMnemonicString() \
+                        .casefold() \
+                        .partition('.') [0] # e.g. 'scasb.repne' -> 'scasb'
 
+                    match instr_mnemonic:
+                        case    'push'  | 'pusha'   | 'pushf'   | \
+                                          'pushad'  | 'pushfd'  | \
+                                'pop'   | 'popa'    | 'popf'    | \
+                                          'popad'   | 'popfd'   | \
+                                'enter' | 'leave':
+                            funcs_features[curr_func_name]['stack'] += 1
+                        
+                        case    'add'   | 'adc'     | 'inc'     | \
+                                'sub'   | 'sbb'     | 'dec'     | \
+                                'mul'   | 'imul'    | \
+                                'div'   | 'idiv'    | \
+                                'neg':
+                            funcs_features[curr_func_name]['arithmetic'] += 1
+                        
+                        case    'and'   | 'or'      | 'xor'     | 'not':
+                            funcs_features[curr_func_name]['logical'] += 1
+                        
+                        case    'cmp'   | 'test':
+                            funcs_features[curr_func_name]['comparative'] += 1
+                        
+                        case    'je'    | 'jz'      | 'jne' | 'jnz' | \
+                                'jg'    | 'jnle'    | 'jge' | 'jnl' | \
+                                'jl'    | 'jnge'    | 'jle' | 'jng' | \
+                                'ja'    | 'jnbe'    | 'jae' | 'jnb' | \
+                                'jb'    | 'jnae'    | 'jbe' | 'jna' | \
+                                'jo'    | 'jno'     | 'js'  | 'jns' | \
+                                'jc'    | 'jnc'     | 'jp'  | 'jpe' | \
+                                'jnp'   | 'jpo'     | \
+                                'loop'  | 'loope'   | 'loopz' | \
+                                'loopne'| 'loopnz'  | \
+                                'jcxz'  | 'jecxz':
+                            funcs_features[curr_func_name]['cond_jmp'] += 1
+                        
+                        case    'jmp':
+                            funcs_features[curr_func_name]['uncond_jmp'] += 1
+                        
+                        case    'shl'   | 'sal'     | 'shr'     | 'sar' | \
+                                'rol'   | 'ror'     | 'rcl'     | 'rcr':
+                            funcs_features[curr_func_name]['shift_rot'] += 1 
+                        
+                        case    'mov'   | 'movsx'   | 'movsxd'  | 'movzx':
+                            funcs_features[curr_func_name]['mov'] += 1
+                        
+                        case    'lea':
+                            funcs_features[curr_func_name]['lea'] += 1
 
-                    
-                    if not isJump:
-                        instr_mnemonic = instr.getMnemonicString().casefold()
-                        match instr_mnemonic:
-                            case    'push'  | 'pusha'   | 'pushf'   | \
-                                              'pushad'  | 'pushfd'  | \
-                                    'pop'   | 'popa'    | 'popf'    | \
-                                              'popad'   | 'popfd'   | \
-                                    'enter' | 'leave'   | 'ret':
-                                funcs_features[curr_func_name]['stack'] += 1
-                            
-                            case    'add'   | 'adc'     | 'inc'     | \
-                                    'sub'   | 'sbb'     | 'dec'     | \
-                                    'mul'   | 'imul'    | \
-                                    'div'   | 'idiv':
-                                funcs_features[curr_func_name]['arithmetic'] += 1
-                            
-                            case    'and'   | 'or'      | 'xor'     | 'not':
-                                funcs_features[curr_func_name]['logical'] += 1
-                            
-                            case    'cmp'   | 'test':
-                                funcs_features[curr_func_name]['comparative'] += 1
-                            
-                            case    'shl'   | 'sal'     | 'shr'     | 'sar' | \
-                                    'rol'   | 'ror'     | 'rcl'     | 'rcr':
-                                funcs_features[curr_func_name]['shift_rot'] += 1 
-                            
-                            case _:
-                                funcs_features[curr_func_name]['other'] += 1
+                        case    'call'  | 'ret':
+                            funcs_features[curr_func_name]['call_ret'] += 1
+                        
+                        case    'movsb' | 'movsw'   | 'movsd'   | \
+                                'lodsb' | 'lodsw'   | 'lodsd'   | \
+                                'stosb' | 'stosw'   | 'stosd'   | \
+                                'cmpsb' | 'cmpsw'   | 'cmpsd'   | \
+                                'scasb' | 'scasw'   | 'scasd':
+                            funcs_features[curr_func_name]['string'] += 1
+                        
+                        case    'bt'    | 'bts'     | 'btr'     | 'btc'     | \
+                                'bsf'   | 'bsr'     | \
+                                'stc'   | 'clc'     | 'cmc'     | \
+                                'std'   | 'cld'     | 'sti'     | 'cli'     | \
+                                'lahf'  | 'sahf'    | \
+                                'setc'  | 'setb'    | 'setnae'  | 'setnc'   | \
+                                                      'setae'   | 'setnb'   | \
+                                'sete'  | 'setz'    | 'setne'   | 'setnz'   | \
+                                'sets'  | 'setns'   | 'seto'    | 'setno'   | \
+                                'setg'  | 'setge'   | 'setl'    | 'setle'   | \
+                                'seta'  | 'setae'   | 'setb'    | 'setbe'   | \
+                                'setp'  | 'setnp':
+                                funcs_features[curr_func_name]['bit_flag'] += 1
+
+                        case _:
+                            funcs_features[curr_func_name]['other'] += 1
+                            other_instrs.append(instr_mnemonic)
 
     if num_prg_instructions < NUM_INSTRUCTIONS_THRESHOLD:
         raise InsufficientInstructionsError(
             num_prg_instructions,
             NUM_INSTRUCTIONS_THRESHOLD
         )
+
+    if other_instrs:
+        unk_instrs = Counter(other_instrs)
+        print("Instructions classified as 'other':")
+        for instr, count in unk_instrs.most_common():
+            print(f"\t{instr}: {count}")
+    
+    # Get the number of instructions in the entry point (if any)
+    if 'entry' in funcs_features:
+        num_ep_instrs = sum(
+            instr_type_count
+            for instr_type_count in funcs_features['entry'].values()
+        )
+
+        # if the entry point has a low amount of instructions, check
+        # if it calls a single function and merge the features
+        # of the entry point with the called function's features
+        # (a lot of packers' stubs consist of a single JMP instruction).
+        if (
+            num_ep_instrs < NUM_INSTRUCTIONS_EP_THRESHOLD and
+            len(called_funcs['entry']) == 1
+        ):
+            ep_called_func = next(iter(called_funcs['entry']))
+            
+            # The EP gets its called function's called funcs (if any);
+            # otherwise, simply clear EP's set of called functions
+            called_funcs['entry'] = (
+                called_funcs.pop(ep_called_func)
+                if ep_called_func in called_funcs
+                else set()
+            )
+            
+            # Merge features
+            for instr in funcs_features['entry'].keys():
+                funcs_features['entry'][instr] += \
+                    funcs_features[ep_called_func][instr]
+
+            # Delete the EP's called function's features
+            del funcs_features[ep_called_func]
+
+            # Replace any occurrences of ep_called_func with 'entry'
+            for curr_cf_set in called_funcs.values():
+                if ep_called_func in curr_cf_set:
+                    curr_cf_set.remove(ep_called_func)
+                    curr_cf_set.add('entry')
 
     return funcs_features, called_funcs
 
