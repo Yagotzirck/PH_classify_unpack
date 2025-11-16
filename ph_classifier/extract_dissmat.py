@@ -13,26 +13,24 @@ from .tool_dependencies.utils import *
 from .graph_similarity.evaluation import compute_similarity
 from . import paths
 
-def packers_paths_setup(cg_extractor: str) -> tuple[set[str], str, str, str, str]:
+def packers_paths_setup(cg_extractor: str) -> tuple[tuple[str, ...], str, str, str, str]:
     if cg_extractor == '--radare2':
         DB_PATH = paths.GRAPHS_TRAIN_RADARE2_PATH
         DISSMATS_PATH = paths.DISSMATS_RADARE2_PATH
         FIXED_THRESHOLDS_PATH = paths.FIXED_THRESHOLDS_RADARE2_PATH
         MODEL_PATH = paths.MODEL_RADARE2_PATH
+        CLASSES_LIST_PATH = paths.CLASSES_LIST_RADARE2_PATH
     elif cg_extractor == '--ghidra':
         DB_PATH = paths.GRAPHS_TRAIN_GHIDRA_PATH
         DISSMATS_PATH = paths.DISSMATS_GHIDRA_PATH
         FIXED_THRESHOLDS_PATH = paths.FIXED_THRESHOLDS_GHIDRA_PATH
         MODEL_PATH = paths.MODEL_GHIDRA_PATH
+        CLASSES_LIST_PATH = paths.CLASSES_LIST_GHIDRA_PATH
     else:
         raise paths.UnspecifiedCallGraphGeneratorError()
     
-    PACKERS = set(
-        os.path.basename(filename).partition('_')[0]
-        for filename in glob.iglob(
-            os.path.join(DB_PATH, '*.xml')
-        )
-    )
+    with open(CLASSES_LIST_PATH, 'r') as in_fp:
+        PACKERS = tuple( line.strip() for line in in_fp )
     
     return PACKERS, DB_PATH, DISSMATS_PATH, FIXED_THRESHOLDS_PATH, MODEL_PATH
 
@@ -45,13 +43,6 @@ def extract_dissmat(cg_extractor: str):
 
     # import configuration
     config = get_default_config()
-
-    # Clear previously created dissimilarity matrices (if any)
-    for old_dissmat in glob.iglob(f'{DISSMATS_PATH}/*.pkl'):
-        os.remove(
-            os.path.join(DISSMATS_PATH, old_dissmat)
-        )
-
 
     db_dataset = TrainingPackedGraphSimilarityDataset(DB_PATH,validation_size=config['data']['dataset_params']['validation_size'])
     # Extract normalization metrics from db
@@ -69,22 +60,18 @@ def extract_dissmat(cg_extractor: str):
 
     # Create a dissimilarity matrix for each packer in db
 
-    # extracted_packers = set([filename.split("_")[0] for filename in listdir(EXPERIMENT_PATH + 'dissmat_rgd1/')])
-    extracted_packers = []
-
-    for packer in set([filename.split("_")[0] for filename in filenames]):
-
-        if packer in extracted_packers:
-            print("Dissimilarity matrix for packer: ", packer, " already exists.\n")
-            continue
+    for packer in PACKERS: 
 
         print("Processing packer: ", packer)
 
         similarities = defaultdict(lambda: np.array([]))
         current_file_num = 1
 
-        filenames_by_packer = [filename for filename in filenames if filename.startswith(packer)]
-        filenames_by_packer = sorted(filenames_by_packer)
+        filenames_by_packer = sorted(
+            filename
+            for filename in filenames
+            if filename.startswith(packer)
+        )
         number_of_files = len(filenames_by_packer)
 
         for filename in filenames_by_packer:
