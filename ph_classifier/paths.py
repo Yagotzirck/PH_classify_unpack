@@ -128,6 +128,19 @@ MODEL_GHIDRA_PATH  = os.path.join(
 )
 
 #####################################################################
+# Cosine similarity matrices' paths 
+#####################################################################
+SIMILMAT_RADARE2_PATH = os.path.join(
+    TRAINING_GEN_FILES_RADARE2_PATH,
+    'cosine_similarity_matrix.pkl'
+)
+
+SIMILMAT_GHIDRA_PATH = os.path.join(
+    TRAINING_GEN_FILES_GHIDRA_PATH,
+    'cosine_similarity_matrix.pkl'
+)
+
+#####################################################################
 # Dissimilarity matrices' folders 
 #####################################################################
 DISSMATS_RADARE2_PATH = os.path.join(

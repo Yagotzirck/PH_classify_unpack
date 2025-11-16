@@ -223,6 +223,7 @@ dependencies:
   - zipp=3.15.0
   - zlib=1.2.13
   - zstd=1.5.5
+  - seaborn
   - pip:
       - ghidra-stubs==11.4
       - graphviz==0.20.3
