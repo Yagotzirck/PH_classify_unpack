@@ -29,6 +29,12 @@ def packers_paths_setup(cg_extractor: str) -> tuple[tuple[str, ...], str, str, s
     else:
         raise paths.UnspecifiedCallGraphGeneratorError()
     
+    # Clear previously created dissimilarity matrices (if any)
+    for old_dissmat in glob.iglob(f'{DISSMATS_PATH}/*.pkl'):
+        os.remove(
+            os.path.join(DISSMATS_PATH, old_dissmat)
+        )
+    
     with open(CLASSES_LIST_PATH, 'r') as in_fp:
         PACKERS = tuple( line.strip() for line in in_fp )
     
