@@ -8,6 +8,7 @@ from collections import defaultdict, Counter
 import pickle
 import sys
 import os
+import time
 
 from . import paths
 
@@ -223,4 +224,8 @@ def main():
 
 
 if __name__ == '__main__':
+    start = time.perf_counter()
     main()
+    elapsed_secs = time.perf_counter() - start
+
+    print(f"Time taken: {elapsed_secs:.3f} seconds")

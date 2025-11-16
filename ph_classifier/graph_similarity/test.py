@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -101,6 +102,8 @@ def test(
         return conf_mat, packer_labels
 
 
+    start = time.perf_counter()
+
     TEST_SET_PATH, CLASSES_LIST_PATH = paths_setup(cg_extractor)
     
     packers_samples, num_total_samples = samples_grouped_by_packer(
@@ -144,7 +147,10 @@ def test(
         f"{num_total_samples:<15} | "
         f"{total_correct_classifications / num_total_samples:<10}"
     )
-    print(80 * '-')
+
+    print(80 * '=')
+    elapsed_secs = time.perf_counter() - start
+    print(f"Time taken: {elapsed_secs:.3f} seconds\n")
 
     print("Showing confusion matrix")
     disp = ConfusionMatrixDisplay(

@@ -3,6 +3,7 @@ import glob
 import os
 import sys
 import types
+import time
 
 import ph_classifier.graph_extraction.radare2_extract_custom_gcg as r2_gcg
 import ph_classifier.graph_extraction.ghidra_extract_custom_gcg as ghidra_gcg
@@ -103,4 +104,8 @@ def main():
 
 
 if __name__ == '__main__':
+    start = time.perf_counter()
     main()
+    elapsed_secs = time.perf_counter() - start
+
+    print(f"Time taken: {elapsed_secs:.3f} seconds")

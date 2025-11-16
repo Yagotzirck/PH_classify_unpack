@@ -6,6 +6,7 @@ from collections import defaultdict
 import glob
 import os
 import sys
+import time
 
 from .tool_dependencies.configure import *
 from .graph_clustering.clustering_dataset import *
@@ -174,4 +175,8 @@ def main():
 
 
 if __name__ == '__main__':
+    start = time.perf_counter()
     main()
+    elapsed_secs = time.perf_counter() - start
+
+    print(f"Time taken: {elapsed_secs:.3f} seconds")

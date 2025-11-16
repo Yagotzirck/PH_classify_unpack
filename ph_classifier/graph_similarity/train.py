@@ -12,6 +12,7 @@ import random
 import math
 import gc
 import sys
+import time
 
 PAIRS_PROP = 1 # % of the pairs are used, increase or decrease this value to change the number of pairs used
 
@@ -227,5 +228,8 @@ def main():
     torch.save(best_model_statedict, MODEL_PATH)
 
 if __name__ == '__main__':
-
+    start = time.perf_counter()
     main()
+    elapsed_secs = time.perf_counter() - start
+
+    print(f"Time taken: {elapsed_secs:.3f} seconds")
