@@ -18,19 +18,6 @@ if typing.TYPE_CHECKING:
 # to be considered valid
 NUM_INSTRUCTIONS_THRESHOLD = 20
 
-# The minimum amount of instructions for the
-# entry point to keep it as a separate function.
-# Otherwise, if it calls a single function, merge it with the called function.
-# This is done because many packers tend to have a single JMP instruction in
-# the entry point, and this confuses the Graph Matching Network when it tries
-# to classify graphs with a similar topology
-#
-# (e.g. tElock and Eronana graphs have only two nodes, with the entry point
-# nodes being almost identical; unless both packers are included in the 
-# training set, the net confuses the external packer with the one included
-# in the training set).
-NUM_INSTRUCTIONS_EP_THRESHOLD = 10
-
 class InsufficientInstructionsError(Exception):
     def __init__(self, num_found: int, threshold: int):
         msg = (
@@ -97,7 +84,7 @@ def ghidra_extract_functions(filepath: str) -> \
         }
 
         # Initialize all fields for imported functions
-        # by using the function name's sha256
+        # by using the function name's SHA224
         # (2-byte chunks for each field)
         imported_funcs_dict = {
             name: {
@@ -329,45 +316,6 @@ def ghidra_extract_functions(filepath: str) -> \
         print("Instructions classified as 'other':")
         for instr, count in unk_instrs.most_common():
             print(f"\t{instr}: {count}")
-    
-    # Get the number of instructions in the entry point (if any)
-    if 'entry' in funcs_features:
-        num_ep_instrs = sum(
-            instr_type_count
-            for instr_type_count in funcs_features['entry'].values()
-        )
-
-        # if the entry point has a low amount of instructions, check
-        # if it calls a single function and merge the features
-        # of the entry point with the called function's features
-        # (a lot of packers' stubs consist of a single JMP instruction).
-        if (
-            num_ep_instrs < NUM_INSTRUCTIONS_EP_THRESHOLD and
-            len(called_funcs['entry']) == 1
-        ):
-            ep_called_func = next(iter(called_funcs['entry']))
-            
-            # The EP gets its called function's called funcs (if any);
-            # otherwise, simply clear EP's set of called functions
-            called_funcs['entry'] = (
-                called_funcs.pop(ep_called_func)
-                if ep_called_func in called_funcs
-                else set()
-            )
-            
-            # Merge features
-            for instr in funcs_features['entry'].keys():
-                funcs_features['entry'][instr] += \
-                    funcs_features[ep_called_func][instr]
-
-            # Delete the EP's called function's features
-            del funcs_features[ep_called_func]
-
-            # Replace any occurrences of ep_called_func with 'entry'
-            for curr_cf_set in called_funcs.values():
-                if ep_called_func in curr_cf_set:
-                    curr_cf_set.remove(ep_called_func)
-                    curr_cf_set.add('entry')
 
     return funcs_features, called_funcs
 
