@@ -56,7 +56,8 @@ def split_dataset(cg_extractor: str, train_perc: float):
     else:
         raise UnspecifiedCallGraphGeneratorError()
 
-    samples_list = glob.iglob(f'{graphs_path}/*.xml')
+    # Make sure the order is always the same for reproducible results
+    samples_list = sorted(glob.iglob(f'{graphs_path}/*.xml'))
 
     packers_samples = collections.defaultdict(list) 
 
