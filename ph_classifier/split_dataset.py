@@ -74,9 +74,11 @@ def split_dataset(cg_extractor: str, train_perc: float):
         out_fp.write(packers)
 
     # Split the dataset in training and test sets
-    random.seed(42)
-
     for curr_packer_samples in packers_samples.values():
+        # Use the same seed for each packer: if we set the seed
+        # only once outside the for loop, the shuffling for each
+        # packer is different when we add more packers / samples
+        random.seed(42)
         random.shuffle(curr_packer_samples)
 
         num_packer_samples = len(curr_packer_samples)
